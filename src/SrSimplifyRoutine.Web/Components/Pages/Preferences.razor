@@ -1,0 +1,13 @@
+@page "/preferences"
+@attribute [Authorize]
+@rendermode InteractiveServer
+@inject PlannerService Planner
+<PageTitle>Preferences · SR Simplify Routine</PageTitle>
+<div class="page-heading"><div><p class="eyebrow">YOUR WORKSPACE</p><h1>A few personal touches<span class="accent">.</span></h1><p>Set your name and the time zone for your routine.</p></div></div>
+@if(input is not null){<div class="editor-grid"><section class="card editor-card">@if(message is not null){<div class="notice @(failed?"error":"success")" role="status">@message</div>}<EditForm Model="input" OnValidSubmit="Save" FormName="preferences"><DataAnnotationsValidator /><ValidationSummary /><label for="display-name">What should we call you?</label><InputText id="display-name" class="form-control" @bind-Value="input.DisplayName" maxlength="60" /><label for="time-zone">Time zone</label><InputSelect id="time-zone" class="form-select" @bind-Value="input.TimeZoneId">@foreach(var zone in zones){<option value="@zone">@zone.Replace('_',' ')</option>}</InputSelect><p class="field-help">Existing activities keep their actual scheduled instant. Their displayed time follows your new time zone. New repeating routines use the zone selected here.</p><button class="btn btn-primary" disabled="@busy">Save preferences</button></EditForm></section><aside class="card tip-card"><span class="feature-icon green-soft"><Icon Name="settings" /></span><h2>Your account, protected.</h2><p>Manage your email, password, passkeys, authenticator app and recovery codes.</p><a class="btn btn-outline-primary" href="Account/Manage" data-enhance-nav="false">Account &amp; security ↗</a></aside></div>}
+@code {
+    private ProfileInput? input;private string? message;private bool failed,busy;
+    private static readonly string[] zones=["Europe/Dublin","Europe/London","Europe/Berlin","Europe/Paris","Europe/Lisbon","America/Sao_Paulo","America/New_York","America/Chicago","America/Los_Angeles","Asia/Kolkata","Asia/Tokyo","Australia/Sydney","UTC"];
+    protected override async Task OnInitializedAsync(){var profile=await Planner.GetProfileAsync();input=new(){DisplayName=profile.DisplayName,TimeZoneId=profile.TimeZoneId};}
+    private async Task Save(){busy=true;failed=false;try{await Planner.SaveProfileAsync(input!);message="Your preferences have been saved.";}catch(PlannerException ex){failed=true;message=ex.Message;}finally{busy=false;}}
+}

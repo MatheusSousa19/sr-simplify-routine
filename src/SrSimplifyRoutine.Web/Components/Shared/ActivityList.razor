@@ -1,0 +1,36 @@
+@inject PlannerService Planner
+@if (error is not null) { <div class="notice error" role="alert">@error</div> }
+@if (Items.Count == 0)
+{
+    <div class="empty-state"><span class="empty-icon"><Icon Name="calendar" /></span><h3>Room for something good.</h3><p>@EmptyText</p><a class="btn btn-outline-primary" href="activities/new">Plan an activity</a></div>
+}
+else
+{
+    <div class="activity-list">
+        @foreach (var item in Items)
+        {
+            <div class="activity-row @(item.Status == ActivityStatus.Completed ? "is-complete" : "")" @key="item.Id">
+                <button type="button" class="complete-button @(item.Status == ActivityStatus.Completed ? "checked" : "")" disabled="@busy" @onclick="() => Toggle(item)" aria-label="@((item.Status == ActivityStatus.Completed ? "Reopen " : "Complete ") + item.Title)">@if(item.Status == ActivityStatus.Completed) { <Icon Name="check" /> }</button>
+                <div class="activity-copy"><a class="activity-title" href="@($"activities/{item.Id}/edit")">@item.Title</a><div class="activity-meta"><span class="category-label"><i style="background:@item.Category.Colour"></i>@item.Category.Name</span><span>@PlannerClock.Local(item.StartUtc, TimeZoneId).ToString(ShowDate ? "ddd d MMM · HH:mm" : "HH:mm") · @item.Minutes min</span>@if(item.SeriesId.HasValue){<span title="Part of a repeating routine">↻ Routine</span>}</div></div>
+                <span class="status-pill @item.Status.ToString().ToLowerInvariant()">@item.Status</span>
+                <a class="edit-link" aria-label="Edit @item.Title" href="@($"activities/{item.Id}/edit")">↗</a>
+            </div>
+        }
+    </div>
+}
+@code {
+    [Parameter] public List<PlannerItem> Items { get; set; } = [];
+    [Parameter] public string TimeZoneId { get; set; } = "Europe/Dublin";
+    [Parameter] public bool ShowDate { get; set; } = true;
+    [Parameter] public string EmptyText { get; set; } = "Add a study session, a workout, or time for yourself.";
+    [Parameter] public EventCallback OnChanged { get; set; }
+    private bool busy;
+    private string? error;
+    private async Task Toggle(PlannerItem item)
+    {
+        busy = true; error = null;
+        try { await Planner.SetStatusAsync(item.Id, item.Status == ActivityStatus.Completed ? ActivityStatus.Planned : ActivityStatus.Completed); await OnChanged.InvokeAsync(); }
+        catch (PlannerException ex) { error = ex.Message; }
+        finally { busy = false; }
+    }
+}

@@ -1,92 +1,19 @@
-﻿@implements IDisposable
-
-@inject NavigationManager NavigationManager
-
-<div class="top-row ps-3 navbar navbar-dark">
-    <div class="container-fluid">
-        <a class="navbar-brand" href="">SrSimplifyRoutine.Web</a>
-    </div>
+<a href="#main-content" class="skip-link">Skip to content</a>
+<a class="brand" href=""><span class="brand-mark">sr<span>↗</span></span><span><strong>Simplify Routine</strong><small>MAKE TIME FOR YOU</small></span></a>
+<p class="nav-caption">WORKSPACE</p>
+<nav class="main-nav" aria-label="Main navigation">
+    <NavLink href="dashboard" class="nav-item" Match="NavLinkMatch.All"><Icon Name="dashboard" /> Overview</NavLink>
+    <NavLink href="calendar" class="nav-item"><Icon Name="calendar" /> Calendar</NavLink>
+    <NavLink href="planner" class="nav-item"><Icon Name="list" /> All activities</NavLink>
+    <p class="nav-caption">YOUR ROUTINE</p>
+    <NavLink href="studies" class="nav-item"><Icon Name="book" /> Studies <span class="nav-dot purple"></span></NavLink>
+    <NavLink href="workouts" class="nav-item"><Icon Name="workout" /> Workouts <span class="nav-dot green"></span></NavLink>
+    <NavLink href="categories" class="nav-item"><Icon Name="layers" /> Categories</NavLink>
+    <NavLink href="progress" class="nav-item"><Icon Name="chart" /> Weekly progress</NavLink>
+    <NavLink href="preferences" class="nav-item"><Icon Name="settings" /> Preferences</NavLink>
+</nav>
+<div class="sidebar-bottom">
+    <div class="sidebar-note"><span class="note-spark">✦</span><strong>A little more intentional.</strong><p>Give your priorities a place in your day.</p><a href="activities/new">Plan an activity <span>↗</span></a></div>
+    <AuthorizeView><Authorized><div class="account-links"><a href="Account/Manage" data-enhance-nav="false">Account &amp; security</a><form action="Account/Logout" method="post"><AntiforgeryToken /><input type="hidden" name="ReturnUrl" value="" /><button type="submit">Sign out ↗</button></form></div></Authorized><NotAuthorized><a class="btn btn-primary w-100" href="Account/Register" data-enhance-nav="false">Create your account</a></NotAuthorized></AuthorizeView>
+    <span class="sidebar-version">SR / SIMPLIFY ROUTINE</span>
 </div>
-
-<input type="checkbox" title="Navigation menu" class="navbar-toggler" />
-
-<div class="nav-scrollable" onclick="document.querySelector('.navbar-toggler').click()">
-    <nav class="nav flex-column">
-        <div class="nav-item px-3">
-            <NavLink class="nav-link" href="" Match="NavLinkMatch.All">
-                <span class="bi bi-house-door-fill-nav-menu" aria-hidden="true"></span> Home
-            </NavLink>
-        </div>
-
-        <div class="nav-item px-3">
-            <NavLink class="nav-link" href="counter">
-                <span class="bi bi-plus-square-fill-nav-menu" aria-hidden="true"></span> Counter
-            </NavLink>
-        </div>
-
-        <div class="nav-item px-3">
-            <NavLink class="nav-link" href="weather">
-                <span class="bi bi-list-nested-nav-menu" aria-hidden="true"></span> Weather
-            </NavLink>
-        </div>
-
-        <div class="nav-item px-3">
-            <NavLink class="nav-link" href="auth">
-                <span class="bi bi-lock-nav-menu" aria-hidden="true"></span> Auth Required
-            </NavLink>
-        </div>
-
-        <AuthorizeView>
-            <Authorized>
-                <div class="nav-item px-3">
-                    <NavLink class="nav-link" href="Account/Manage">
-                        <span class="bi bi-person-fill-nav-menu" aria-hidden="true"></span> @context.User.Identity?.Name
-                    </NavLink>
-                </div>
-                <div class="nav-item px-3">
-                    <form action="Account/Logout" method="post">
-                        <AntiforgeryToken />
-                        <input type="hidden" name="ReturnUrl" value="@currentUrl" />
-                        <button type="submit" class="nav-link">
-                            <span class="bi bi-arrow-bar-left-nav-menu" aria-hidden="true"></span> Logout
-                        </button>
-                    </form>
-                </div>
-            </Authorized>
-            <NotAuthorized>
-                <div class="nav-item px-3">
-                    <NavLink class="nav-link" href="Account/Register">
-                        <span class="bi bi-person-nav-menu" aria-hidden="true"></span> Register
-                    </NavLink>
-                </div>
-                <div class="nav-item px-3">
-                    <NavLink class="nav-link" href="Account/Login">
-                        <span class="bi bi-person-badge-nav-menu" aria-hidden="true"></span> Login
-                    </NavLink>
-                </div>
-            </NotAuthorized>
-        </AuthorizeView>
-    </nav>
-</div>
-
-@code {
-    private string? currentUrl;
-
-    protected override void OnInitialized()
-    {
-        currentUrl = NavigationManager.ToBaseRelativePath(NavigationManager.Uri);
-        NavigationManager.LocationChanged += OnLocationChanged;
-    }
-
-    private void OnLocationChanged(object? sender, LocationChangedEventArgs e)
-    {
-        currentUrl = NavigationManager.ToBaseRelativePath(e.Location);
-        StateHasChanged();
-    }
-
-    public void Dispose()
-    {
-        NavigationManager.LocationChanged -= OnLocationChanged;
-    }
-}
-

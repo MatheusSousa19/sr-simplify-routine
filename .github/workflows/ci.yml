@@ -1,0 +1,31 @@
+name: Build and test
+on:
+  push:
+    branches: [main]
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - name: Restore locked dependencies and audit vulnerabilities
+        run: dotnet restore --locked-mode
+      - name: Build
+        run: dotnet build --configuration Release --no-restore -m:1
+      - name: Test ownership, validation and abuse controls
+        run: dotnet test --configuration Release --no-build -m:1 --logger trx --results-directory TestResults
+      - name: Verify application publish
+        run: dotnet publish src/SrSimplifyRoutine.Web --configuration Release --no-build --output artifacts/app
+      - name: Test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: TestResults
+          retention-days: 7

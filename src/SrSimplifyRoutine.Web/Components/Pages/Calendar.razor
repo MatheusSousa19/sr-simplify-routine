@@ -1,0 +1,35 @@
+@page "/calendar"
+@attribute [Authorize]
+@rendermode InteractiveServer
+@inject PlannerService Planner
+<PageTitle>Calendar · SR Simplify Routine</PageTitle>
+<div class="page-heading"><div><p class="eyebrow">GIVE YOUR PRIORITIES A PLACE</p><h1>Your calendar<span class="accent">.</span></h1><p>One view for every part of your routine.</p></div><a class="btn btn-primary" href="activities/new"><Icon Name="plus" /> New activity</a></div>
+@if (profile is null) { <p class="loading-state">Loading your calendar…</p> }
+else
+{
+    <section class="card calendar-card"><div class="calendar-toolbar"><div class="calendar-date"><button class="icon-button" aria-label="Previous period" @onclick="() => Move(-1)">‹</button><h2>@focus.ToString(mode == "day" ? "d MMMM yyyy" : "MMMM yyyy")</h2><button class="icon-button" aria-label="Next period" @onclick="() => Move(1)">›</button><button class="btn btn-sm btn-light" @onclick="Today">Today</button></div><div class="segmented" aria-label="Calendar view">@foreach(var view in new[]{"month","week","day"}){<button class="@(mode == view ? "selected" : "")" aria-pressed="@(mode == view)" @onclick="() => SetMode(view)">@view</button>}</div></div>
+    <div class="calendar-filters"><select class="form-select" @bind="categoryId" aria-label="Filter calendar category"><option value="0">All categories</option>@foreach(var c in categories){<option value="@c.Id">@c.Name</option>}</select><span><Icon Name="clock" /> @profile.TimeZoneId</span></div>
+    @if(mode == "day") { <div class="calendar-day-agenda"><ActivityList Items="ForDay(focus)" TimeZoneId="@profile.TimeZoneId" OnChanged="Load" ShowDate="false" /></div> }
+    else
+    {
+        <div class="calendar-scroll"><div class="calendar-grid @(mode == "week" ? "week-view" : "")"><div class="weekday">MON</div><div class="weekday">TUE</div><div class="weekday">WED</div><div class="weekday">THU</div><div class="weekday">FRI</div><div class="weekday">SAT</div><div class="weekday">SUN</div>
+        @for(var n=0;n<(mode == "month" ? 42 : 7);n++) { var day=gridStart.AddDays(n);var entries=ForDay(day);<div class="calendar-cell @(day.Month != focus.Month && mode == "month" ? "outside-month" : "")"><button class="date-number @(day.Date == localToday ? "is-today" : "")" @onclick="() => OpenDay(day)" aria-label="Open @day.ToString("D")">@day.Day</button>@foreach(var item in entries.Take(mode == "month" ? 3 : 12)){<a class="calendar-event @(item.Status == ActivityStatus.Completed ? "event-completed" : "")" style="--event-colour:@item.Category.Colour" href="@($"activities/{item.Id}/edit")" title="@item.Title"><span>@PlannerClock.Local(item.StartUtc,profile.TimeZoneId).ToString("HH:mm")</span> @item.Title</a>}@if(entries.Count>(mode == "month" ? 3 : 12)){<button class="more-events" @onclick="()=>OpenDay(day)">+@(entries.Count-(mode == "month" ? 3 : 12)) more</button>}</div>}
+        </div></div>
+    }
+    <div class="calendar-legend">@foreach(var c in categories.Where(x=>!x.IsArchived)){<span class="category-label"><i style="background:@c.Colour"></i>@c.Name</span>}</div></section>
+}
+@code {
+    private ApplicationUser? profile;
+    private List<Category> categories=[];
+    private List<PlannerItem> items=[];
+    private DateTime focus, gridStart, localToday;
+    private string mode="month";
+    private int categoryId;
+    protected override async Task OnInitializedAsync(){profile=await Planner.GetProfileAsync();categories=await Planner.GetCategoriesAsync(true);focus=localToday=PlannerClock.Local(DateTime.UtcNow,profile.TimeZoneId).Date;await Load();}
+    private async Task Load(){if(profile is null)return;gridStart=mode=="month"?PlannerClock.WeekStart(new DateTime(focus.Year,focus.Month,1)):mode=="week"?PlannerClock.WeekStart(focus):focus.Date;var end=gridStart.AddDays(mode=="month"?42:mode=="week"?7:1);items=await Planner.GetItemsAsync(PlannerClock.ToUtc(gridStart,profile.TimeZoneId),PlannerClock.ToUtc(end,profile.TimeZoneId));}
+    private List<PlannerItem> ForDay(DateTime day)=>items.Where(x=>PlannerClock.Local(x.StartUtc,profile!.TimeZoneId).Date<=day.Date&&PlannerClock.Local(x.EndUtc,profile.TimeZoneId)>day.Date&&(categoryId==0||x.CategoryId==categoryId)).ToList();
+    private async Task Move(int amount){focus=mode=="month"?focus.AddMonths(amount):focus.AddDays(amount*(mode=="week"?7:1));await Load();}
+    private async Task Today(){focus=localToday;await Load();}
+    private async Task SetMode(string value){mode=value;await Load();}
+    private async Task OpenDay(DateTime day){focus=day;mode="day";await Load();}
+}

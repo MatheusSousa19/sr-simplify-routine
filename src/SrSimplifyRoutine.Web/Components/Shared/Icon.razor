@@ -1,0 +1,19 @@
+<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="@Path" /></svg>
+@code {
+    [Parameter] public string Name { get; set; } = "calendar";
+    private string Path => Name switch {
+        "dashboard" => "M3 3h7v7H3z M14 3h7v7h-7z M3 14h7v7H3z M14 14h7v7h-7z",
+        "calendar" => "M5 5h14a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2z M16 3v4 M8 3v4 M3 11h18 M8 15h2 M14 15h2",
+        "book" => "M12 5v16 M12 5C8 2 4 3 2 4v15c4-1 7-1 10 2 3-3 6-3 10-2V4c-2-1-6-2-10 1z",
+        "workout" => "M7 7v10 M3 9v6 M17 7v10 M21 9v6 M7 12h10 M3 12h4 M17 12h4",
+        "layers" => "m12 3 10 5-10 5L2 8z M2 12l10 5 10-5 M2 16l10 5 10-5",
+        "chart" => "M4 3v17h17 M8 15v-4 M13 15V7 M18 15V4",
+        "settings" => "M4 7h16 M4 17h16 M8 4v6 M16 14v6",
+        "list" => "M9 6h12 M9 12h12 M9 18h12 M3 6h1 M3 12h1 M3 18h1",
+        "plus" => "M12 5v14 M5 12h14",
+        "clock" => "M12 8v5l3 2 M22 12a10 10 0 1 1-20 0 10 10 0 0 1 20 0",
+        "check" => "m5 12 4 4L19 6",
+        "arrow" => "M5 12h14 m-5-5 5 5-5 5",
+        _ => "M12 3v18 M3 12h18"
+    };
+}

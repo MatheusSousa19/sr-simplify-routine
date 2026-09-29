@@ -1,23 +1,10 @@
-﻿@inherits LayoutComponentBase
-
-<div class="page">
-    <div class="sidebar">
-        <NavMenu />
-    </div>
-
-    <main>
-        <div class="top-row px-4">
-            <a href="https://learn.microsoft.com/aspnet/core/" target="_blank">About</a>
-        </div>
-
-        <article class="content px-4">
-            @Body
-        </article>
+@inherits LayoutComponentBase
+<div class="app-shell">
+    <aside class="sidebar"><NavMenu /></aside>
+    <main class="main-content" id="main-content">
+        <header class="topbar"><span class="workspace-label"><span class="live-dot"></span> Your space to make progress</span><AuthorizeView><Authorized><a class="profile-pill" href="preferences"><span class="avatar">SR</span><span>My workspace</span></a></Authorized><NotAuthorized><a class="btn btn-sm btn-outline-primary" href="Account/Login" data-enhance-nav="false">Sign in</a></NotAuthorized></AuthorizeView></header>
+        <article class="page-content">@Body</article>
+        <footer class="app-footer"><span>SR Simplify Routine</span><span>Small steps. Meaningful progress.</span></footer>
     </main>
 </div>
-
-<div id="blazor-error-ui" data-nosnippet>
-    An unhandled error has occurred.
-    <a href="." class="reload">Reload</a>
-    <span class="dismiss">🗙</span>
-</div>
+<div id="blazor-error-ui" role="alert" data-nosnippet>Something went wrong. Your saved activities are safe. <a href="." class="reload">Reload</a><button class="dismiss" aria-label="Dismiss">×</button></div>

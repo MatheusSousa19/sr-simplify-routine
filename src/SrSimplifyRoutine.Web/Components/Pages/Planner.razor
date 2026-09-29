@@ -1,0 +1,25 @@
+@page "/planner"
+@page "/studies"
+@page "/workouts"
+@attribute [Authorize]
+@rendermode InteractiveServer
+@inject PlannerService PlannerService
+@inject NavigationManager Navigation
+<PageTitle>@Title · SR Simplify Routine</PageTitle>
+<div class="page-heading"><div><p class="eyebrow">@Eyebrow</p><h1>@Title<span class="accent">.</span></h1><p>@Description</p></div><a class="btn btn-primary" href="activities/new"><Icon Name="plus" /> New activity</a></div>
+@if(profile is null){<p class="loading-state">Opening your activities…</p>}
+else
+{
+    <section class="card"><div class="list-filters"><label>Search<input class="form-control" @bind="search" @bind:event="oninput" placeholder="Find an activity…" maxlength="120" /></label><label>Category<select class="form-select" @bind="category"><option value="0">All categories</option>@foreach(var c in categories.Where(x=>kind is null||x.Kind==kind)){<option value="@c.Id">@c.Name</option>}</select></label><label>Status<select class="form-select" @bind="status"><option value="all">All statuses</option>@foreach(var s in Enum.GetValues<ActivityStatus>()){<option value="@s.ToString()">@s</option>}</select></label></div><div class="range-filters"><label>From <input class="form-control" type="date" @bind="from" /></label><label>Through <input class="form-control" type="date" @bind="through" /></label><button class="btn btn-outline-primary" @onclick="Load">Apply dates</button><span>@Visible.Count activities</span></div>@if(error is not null){<div class="notice error" role="alert">@error</div>}<ActivityList Items="Visible" TimeZoneId="@profile.TimeZoneId" OnChanged="Load" /></section>
+}
+@code {
+    [SupplyParameterFromQuery(Name="category")] public int CategoryFilter {get;set;}
+    private ApplicationUser? profile; private List<Category> categories=[];private List<PlannerItem> items=[];
+    private string search="",status="all";private int category;private CategoryKind? kind;private DateTime from,through;private string? error;
+    private string Title=>kind==CategoryKind.Study?"Studies":kind==CategoryKind.Workout?"Workouts":"All activities";
+    private string Eyebrow=>kind==CategoryKind.Study?"MAKE ROOM TO LEARN":kind==CategoryKind.Workout?"MOVE WITH INTENTION":"YOUR ROUTINE, YOUR WAY";
+    private string Description=>kind==CategoryKind.Study?"Keep your subjects, deadlines and study sessions in one place.":kind==CategoryKind.Workout?"Plan your training, record your notes, and keep showing up.":"Organise every part of your day, across all your categories.";
+    private List<PlannerItem> Visible=>items.Where(x=>(kind is null||x.Category.Kind==kind)&&(category==0||x.CategoryId==category)&&(status=="all"||x.Status.ToString()==status)&&(string.IsNullOrWhiteSpace(search)||x.Title.Contains(search,StringComparison.OrdinalIgnoreCase)||x.Notes.Contains(search,StringComparison.OrdinalIgnoreCase))).ToList();
+    protected override async Task OnParametersSetAsync(){var path=new Uri(Navigation.Uri).AbsolutePath;kind=path=="/studies"?CategoryKind.Study:path=="/workouts"?CategoryKind.Workout:null;category=CategoryFilter;profile=await PlannerService.GetProfileAsync();categories=await PlannerService.GetCategoriesAsync(true);var today=PlannerClock.Local(DateTime.UtcNow,profile.TimeZoneId).Date;from=today.AddDays(-7);through=today.AddDays(30);await Load();}
+    private async Task Load(){error=null;try{items=await PlannerService.GetItemsAsync(PlannerClock.ToUtc(from,profile!.TimeZoneId),PlannerClock.ToUtc(through.AddDays(1),profile.TimeZoneId));}catch(PlannerException ex){error=ex.Message;}}
+}

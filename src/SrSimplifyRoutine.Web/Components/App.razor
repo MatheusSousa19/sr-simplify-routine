@@ -1,4 +1,5 @@
-﻿<!DOCTYPE html>
+@inject IConfiguration Configuration
+<!DOCTYPE html>
 <html lang="en">
 
 <head>
@@ -10,7 +11,8 @@
     <link rel="stylesheet" href="@Assets["app.css"]" />
     <link rel="stylesheet" href="@Assets["SrSimplifyRoutine.Web.styles.css"]" />
     <ImportMap />
-    <link rel="icon" type="image/png" href="favicon.png" />
+    <link rel="icon" type="image/svg+xml" href="favicon.svg" />
+    <meta name="description" content="SR Simplify Routine — your private study, workout and everyday planner." />
     <HeadOutlet />
 </head>
 
@@ -19,6 +21,10 @@
     <ReconnectModal />
     <script src="@Assets["_framework/blazor.web.js"]"></script>
     <script src="@Assets["Components/Account/Shared/PasskeySubmit.razor.js"]" type="module"></script>
+@if (Configuration.GetValue<bool>("BotProtection:Enabled"))
+{
+    <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
+}
 </body>
 
 </html>

@@ -1,0 +1,28 @@
+@page "/dashboard"
+@attribute [Authorize]
+@rendermode InteractiveServer
+@inject PlannerService Planner
+<PageTitle>Overview · SR Simplify Routine</PageTitle>
+@if (profile is null) { <p class="loading-state">Opening your workspace…</p> }
+else
+{
+    <div class="page-heading"><div><p class="eyebrow">@today.ToString("dddd, d MMMM yyyy").ToUpperInvariant()</p><h1>Make space for what matters<span class="accent">.</span></h1><p>Welcome, @profile.DisplayName. A little intention goes a long way.</p></div><a class="btn btn-primary" href="activities/new"><Icon Name="plus" /> New activity</a></div>
+    <section class="week-banner"><div><span class="eyebrow">YOUR WEEK, AT A GLANCE</span><h2>Small steps.<br />Real momentum.</h2><p>@BannerText</p><a href="progress">Explore your progress <Icon Name="arrow" /></a></div><div class="week-ring" style="--progress:@Percent%"><div><strong>@Percent<span>%</span></strong><small>of this week's<br />activities complete</small></div></div><div class="banner-decoration" aria-hidden="true">✦</div></section>
+    <div class="stats-grid"><div class="stat-card"><span class="stat-icon purple-soft"><Icon Name="calendar" /></span><small>ON YOUR AGENDA</small><strong>@TodayItems.Count <span>today</span></strong><p>Time set aside for your priorities</p></div><div class="stat-card"><span class="stat-icon green-soft"><Icon Name="check" /></span><small>SHOWING UP</small><strong>@Completed.Count <span>completed</span></strong><p>Activities finished this week</p></div><div class="stat-card"><span class="stat-icon amber-soft"><Icon Name="clock" /></span><small>TIME WELL SPENT</small><strong>@((Completed.Sum(x => x.Minutes) / 60d).ToString("0.#")) <span>hours</span></strong><p>Completed across your categories</p></div></div>
+    <div class="dashboard-grid"><section class="card"><div class="section-heading"><div><span class="eyebrow">ONE THING AT A TIME</span><h2>Today's focus</h2></div><a href="calendar">View calendar ↗</a></div><ActivityList Items="TodayItems" TimeZoneId="@profile.TimeZoneId" ShowDate="false" OnChanged="Load" /></section><section class="card goals-card"><div class="section-heading"><div><span class="eyebrow">KEEP YOUR BALANCE</span><h2>Weekly goals</h2></div></div>@foreach(var category in categories.Where(x => x.WeeklyTargetMinutes > 0).Take(4)){var minutes=Completed.Where(x=>x.CategoryId==category.Id).Sum(x=>x.Minutes);<div class="goal-row"><div><span class="category-label"><i style="background:@category.Colour"></i>@category.Name</span><strong>@minutes<span> / @category.WeeklyTargetMinutes min</span></strong></div><progress max="@category.WeeklyTargetMinutes" value="@Math.Min(minutes,category.WeeklyTargetMinutes)" style="--goal-colour:@category.Colour" aria-label="@category.Name weekly goal"></progress></div>}<a class="subtle-link" href="categories">Personalise your goals ↗</a></section></div>
+    <section class="card upcoming-card"><div class="section-heading"><div><span class="eyebrow">LOOKING AHEAD</span><h2>Coming up next</h2></div><a href="planner">All activities ↗</a></div><ActivityList Items="Upcoming" TimeZoneId="@profile.TimeZoneId" OnChanged="Load" EmptyText="Your next few days are clear. Add something you want to make time for." /></section>
+}
+@code {
+    private ApplicationUser? profile;
+    private List<Category> categories = [];
+    private List<PlannerItem> items = [];
+    private DateTime today, week;
+    private List<PlannerItem> ThisWeek => items.Where(x => PlannerClock.Local(x.StartUtc, profile!.TimeZoneId) >= week && PlannerClock.Local(x.StartUtc, profile!.TimeZoneId) < week.AddDays(7)).ToList();
+    private List<PlannerItem> Completed => ThisWeek.Where(x => x.Status == ActivityStatus.Completed).ToList();
+    private List<PlannerItem> TodayItems => items.Where(x => PlannerClock.Local(x.StartUtc, profile!.TimeZoneId).Date == today).ToList();
+    private List<PlannerItem> Upcoming => items.Where(x => PlannerClock.Local(x.StartUtc, profile!.TimeZoneId).Date > today && x.Status == ActivityStatus.Planned).Take(4).ToList();
+    private int Percent => ThisWeek.Count == 0 ? 0 : (int)Math.Round(100d * Completed.Count / ThisWeek.Count);
+    private string BannerText => ThisWeek.Count == 0 ? "Your next chapter starts with one activity. What will you make time for?" : $"You've completed {Completed.Count} of {ThisWeek.Count} activities this week. Keep finding your rhythm.";
+    protected override Task OnInitializedAsync() => Load();
+    private async Task Load() { profile=await Planner.GetProfileAsync(); categories=await Planner.GetCategoriesAsync(); today=PlannerClock.Local(DateTime.UtcNow,profile.TimeZoneId).Date; week=PlannerClock.WeekStart(today); items=await Planner.GetItemsAsync(PlannerClock.ToUtc(week,profile.TimeZoneId),PlannerClock.ToUtc(week.AddDays(14),profile.TimeZoneId)); }
+}
