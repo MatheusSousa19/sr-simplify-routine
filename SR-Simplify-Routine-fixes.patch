@@ -1,0 +1,611 @@
+From 94992b20d3fbb53b997a5b00889e66e23eb419b3 Mon Sep 17 00:00:00 2001
+From: Codex <codex@users.noreply.github.com>
+Date: Tue, 29 Sep 2026 23:46:30 +0200
+Subject: [PATCH] Fix heading focus and local account setup; add verified
+ development login flow
+
+---
+ README.md                                     | 34 +++++--
+ docs/QUICK_START.md                           | 13 ++-
+ docs/SECURITY.md                              |  6 ++
+ docs/VERIFICATION.md                          | 28 ++++--
+ .../Account/Pages/ForgotPassword.razor        |  2 +
+ .../Pages/ForgotPasswordConfirmation.razor    |  2 +
+ .../Components/Account/Pages/Login.razor      |  2 +
+ .../Components/Account/Pages/Register.razor   |  2 +
+ .../Account/Pages/RegisterConfirmation.razor  |  4 +-
+ .../Pages/ResendEmailConfirmation.razor       |  6 +-
+ .../Shared/DevelopmentEmailNotice.razor       | 10 +++
+ src/SrSimplifyRoutine.Web/Program.cs          | 19 +++-
+ .../Services/DevelopmentTools.cs              | 68 ++++++++++++++
+ .../Services/RoutineEmailSender.cs            | 12 ++-
+ src/SrSimplifyRoutine.Web/wwwroot/app.css     |  3 +
+ .../DevelopmentAccessTests.cs                 | 34 +++++++
+ tests/browser/smoke.cjs                       |  5 ++
+ tests/http/smoke.py                           | 89 +++++++++++++++++++
+ 18 files changed, 311 insertions(+), 28 deletions(-)
+ create mode 100644 src/SrSimplifyRoutine.Web/Components/Account/Shared/DevelopmentEmailNotice.razor
+ create mode 100644 src/SrSimplifyRoutine.Web/Services/DevelopmentTools.cs
+ create mode 100644 tests/SrSimplifyRoutine.Tests/DevelopmentAccessTests.cs
+ create mode 100644 tests/http/smoke.py
+
+diff --git a/README.md b/README.md
+index 100a5d9..ac78bc1 100644
+--- a/README.md
++++ b/README.md
+@@ -31,7 +31,7 @@ The SQLite database is created and migrated automatically in Development. No sep
+ ### Your first account
+ 
+ 1. Select **Create your account**, enter your name and email, and choose a passphrase of at least 12 characters.
+-2. During development, with SMTP unset, confirmation emails are saved as HTML files in **`src/SrSimplifyRoutine.Web/.dev-mail/`**. Open the newest file locally and follow **Confirm email**. These files are never served by the website.
++2. During development, with SMTP unset, confirmation emails are saved as HTML files in **`src/SrSimplifyRoutine.Web/.dev-mail/`**. Click **Open local inbox** on the account page, open the newest message for your email and follow **Confirm email**. The inbox is available only in Development from localhost; it is absent in Production. You can also open the HTML file directly.
+ 3. Sign in. Your private Studies, Workouts and Personal categories are created automatically.
+ 4. Set your time zone under **Preferences**. The initial zone is Europe/Dublin.
+ 5. Add a category if you need one, then choose **New activity**.
+@@ -39,6 +39,29 @@ The SQLite database is created and migrated automatically in Development. No sep
+ 
+ Passwords, confirmation links, cookies, databases and local email files are not included in the repository or download. There are no default credentials.
+ 
++### Working test account
++
++Stop the app, then run:
++
++```sh
++dotnet run --project src/SrSimplifyRoutine.Web --launch-profile http -- --create-demo
++dotnet run --project src/SrSimplifyRoutine.Web --launch-profile http
++```
++
++The first command creates a new, confirmed local test account and prints its unique email and random password. Copy them into the login form. It exits after creating the account; the second command starts the app at http://localhost:5127. Existing accounts are not modified. This command is refused in Production. Never share a development database with production.
++
++### Send real email
++
++Without SMTP configuration, local development intentionally delivers only to the local inbox. To receive real messages, configure your provider's SMTP host, verified sender, username and password using **user secrets** (the project has a UserSecretsId) or environment variables. Do not commit credentials. STARTTLS is required; use the provider's STARTTLS port (usually 587, not implicit TLS port 465).
++
++After supplying the settings listed below, verify SMTP independently:
++
++```sh
++dotnet run --project src/SrSimplifyRoutine.Web --launch-profile http -- --test-email your-address@example.com
++```
++
++A nonzero exit indicates a configuration or delivery error. SMTP acceptance does not guarantee inbox placement: also check spam, the provider's delivery logs and sender/domain verification. Then use **Resend confirmation** for an already-created account. Anonymous responses intentionally do not disclose whether an email is registered. Old confirmation/reset links expire after two hours.
++
+ ## Features
+ 
+ - Registration, confirmed-email login, logout, temporary lockout and password recovery.
+@@ -94,14 +117,7 @@ git add .
+ git commit -m "feat: add reminders"
+ ```
+ 
+-No remote is configured until a remote repository has actually been created. To connect an **empty private GitHub repository** you own:
+-
+-```sh
+-git remote add origin https://github.com/YOUR-USERNAME/sr-simplify-routine.git
+-git push -u origin main
+-```
+-
+-Do not initialise that remote with another README or unrelated history. Use your normal GitHub authentication; never put a token in a remote URL or committed file.
++The remote repository is https://github.com/MatheusSousa19/sr-simplify-routine. Pull updates with `git pull --ff-only`. Use your normal GitHub authentication when pushing changes; never commit access tokens.
+ 
+ ## Before a public deployment
+ 
+diff --git a/docs/QUICK_START.md b/docs/QUICK_START.md
+index ab948ee..f7c4c94 100644
+--- a/docs/QUICK_START.md
++++ b/docs/QUICK_START.md
+@@ -20,11 +20,16 @@ Open **https://localhost:7153**. The application creates its local SQLite databa
+ 
+ ## 3. Register your first account
+ 
+-There is no default password. Register your own account. Open the newest HTML email in:
++Register your own account, then click **Open local inbox** on the confirmation page. Open the newest message addressed to you and click **Confirm email**, then sign in. Without SMTP, messages stay on this computer; nothing arrives at your real email address.
+ 
+-`src/SrSimplifyRoutine.Web/.dev-mail/`
++For an immediately usable local test account, stop the app and run:
+ 
+-Click **Confirm email**, then sign in. This local email folder replaces SMTP only during development.
++```sh
++dotnet run --project src/SrSimplifyRoutine.Web --launch-profile http -- --create-demo
++dotnet run --project src/SrSimplifyRoutine.Web --launch-profile http
++```
++
++Sign in at http://localhost:5127 using the email and random password printed by the first command. There are no shared default credentials. Previously created accounts are preserved.
+ 
+ ## 4. Find the code you want to change
+ 
+@@ -55,6 +60,6 @@ git log --oneline
+ git switch -c feature/my-first-change
+ ```
+ 
+-When ready, connect an empty GitHub repository using the commands in the main README. A remote repository has not been created for you.
++Updates are tracked at https://github.com/MatheusSousa19/sr-simplify-routine. Use `git pull --ff-only` to retrieve fixes.
+ 
+ The main README and `SECURITY.md` explain production configuration. Development mode should stay on your own machine.
+diff --git a/docs/SECURITY.md b/docs/SECURITY.md
+index b22efde..036f16b 100644
+--- a/docs/SECURITY.md
++++ b/docs/SECURITY.md
+@@ -51,3 +51,9 @@ HTTP and interactive service limits are both necessary: an established Blazor co
+ - If an administrator area is added, enforce MFA and least privilege in its server policies. This release has no admin backdoor and no seeded administrator credentials.
+ 
+ No implementation can promise that one person has only one account or that an application cannot be attacked. Unique emails, bot checks, quotas and throttling reduce abuse; availability against distributed attacks also depends on deployment infrastructure.
++
++## Local development tools
++
++The `/dev/inbox` endpoint exists only in Development and requires both a loopback remote IP and a localhost/loopback Host header. It does not trust forwarded headers. Responses disable caching and embedding, and file requests accept only generated message filenames. It exposes local confirmation/reset messages to local developers, so Development must never be publicly hosted or used with a production database. Protect the `.dev-mail` folder and delete old local messages when finished.
++
++`--create-demo` explicitly creates a confirmed development account with a new random password; it never seeds shared credentials at startup and is rejected in Production. The SMTP diagnostic is an explicit CLI command, not a public endpoint. Anonymous account responses remain generic to limit email enumeration.
+diff --git a/docs/VERIFICATION.md b/docs/VERIFICATION.md
+index 24c4973..c27190b 100644
+--- a/docs/VERIFICATION.md
++++ b/docs/VERIFICATION.md
+@@ -1,11 +1,21 @@
+-# Initial verification
++# Verification — 29 September 2026
+ 
+-- Built the application and test project with .NET SDK 10.0.401 / runtime 10.0.12.
+-- A Release build completed with zero warnings and zero errors before the final middleware-order correction.
+-- All 25 automated tests passed. They cover ownership and cross-user access, the database's composite ownership constraint, category archive/restore, activity mutations, input validation, recurrence, DST handling, transactional rollback, quotas, email uniqueness and operation/circuit limits.
+-- Live HTTP checks confirmed anonymous redirects, antiforgery rejection, registration, blocked unconfirmed login, email confirmation, verified login and rendering of the authenticated planner pages.
+-- Those HTTP checks identified a missing-URL error caused by the placement of status-code middleware. The source was corrected to place it before authentication/authorization/antiforgery. The final correction has not yet had a successful repeat HTTP run.
+-- Full interactive browser and visual checks were not completed: Chromium could not start because this execution environment restricted its local Unix sockets. `tests/browser/smoke.cjs` is supplied for a compatible local environment, but is not claimed as a passed test.
+-- Live SMTP, live Turnstile, production hosting and GitHub Actions were not exercised. No remote repository or live website was created.
++Verified the account and focus fixes using .NET SDK 10.0.401 / runtime 10.0.12:
+ 
+-The user elected to build locally. Run the README build/test commands, then check registration, calendar interactions and mobile layouts before deployment. No runtime databases, credentials or confirmation messages are part of the delivery.
++- Release application and test projects compile successfully.
++- All **31 automated tests passed**, including ownership isolation, mutations, quotas, email uniqueness, rate limits and the new development-inbox access restrictions.
++- `python tests/http/smoke.py` passed against a running application with a disposable database. It covers registration, the local inbox, refusal of unconfirmed login, confirmation, verified login, all planner pages, generated demo credentials, anonymous redirects, antiforgery, missing-page handling, inbox path/host restrictions, refusal of production demo creation and refusal of an unconfigured SMTP test.
++- All **17 Playwright browser checks passed** using Chromium headless shell. These cover the heading outline fix with retained keyboard focus indicators, registration/confirmation/login, custom categories, activity creation/editing/completion/deletion, repetitions, calendar month/week/day views, studies/workouts filtering, category archive/restore, progress, preferences, 390px mobile layout, logout and absence of browser JavaScript errors. Desktop screenshots were also inspected.
++
++Run the checks locally after a Release build:
++
++```sh
++dotnet test --configuration Release -m:1
++python tests/http/smoke.py
++# With Playwright and Chromium installed:
++node tests/browser/smoke.cjs
++```
++
++The browser test accepts `SR_PLAYWRIGHT_MODULE`, `SR_BROWSER_EXECUTABLE` and `SR_DOTNET` overrides. The HTTP test accepts `SR_DOTNET`. Both use temporary databases. Never run development tooling against a production database.
++
++Actual external SMTP delivery, live Turnstile and production hosting were not exercised because provider credentials and a hosting target were not supplied. Use the README's `--test-email` command after configuring SMTP, then resend any outstanding confirmation. SMTP acceptance alone does not prove inbox delivery. These fixes are source updates, not a public hosting deployment.
+diff --git a/src/SrSimplifyRoutine.Web/Components/Account/Pages/ForgotPassword.razor b/src/SrSimplifyRoutine.Web/Components/Account/Pages/ForgotPassword.razor
+index bf608b0..853bc52 100644
+--- a/src/SrSimplifyRoutine.Web/Components/Account/Pages/ForgotPassword.razor
++++ b/src/SrSimplifyRoutine.Web/Components/Account/Pages/ForgotPassword.razor
+@@ -33,6 +33,8 @@
+      </div>
+ </div>
+ 
++<DevelopmentEmailNotice />
++
+ @code {
+     [SupplyParameterFromForm]
+     private InputModel Input { get; set; } = default!;
+diff --git a/src/SrSimplifyRoutine.Web/Components/Account/Pages/ForgotPasswordConfirmation.razor b/src/SrSimplifyRoutine.Web/Components/Account/Pages/ForgotPasswordConfirmation.razor
+index 57b1fae..149bd52 100644
+--- a/src/SrSimplifyRoutine.Web/Components/Account/Pages/ForgotPasswordConfirmation.razor
++++ b/src/SrSimplifyRoutine.Web/Components/Account/Pages/ForgotPasswordConfirmation.razor
+@@ -6,3 +6,5 @@
+ <p role="alert">
+     Please check your email to reset your password.
+ </p>
++
++<DevelopmentEmailNotice />
+diff --git a/src/SrSimplifyRoutine.Web/Components/Account/Pages/Login.razor b/src/SrSimplifyRoutine.Web/Components/Account/Pages/Login.razor
+index 00a96e8..50887de 100644
+--- a/src/SrSimplifyRoutine.Web/Components/Account/Pages/Login.razor
++++ b/src/SrSimplifyRoutine.Web/Components/Account/Pages/Login.razor
+@@ -15,6 +15,8 @@
+ <div class="auth-intro"><span class="eyebrow">YOUR SPACE IS WAITING</span><h1>Welcome back<span class="accent">.</span></h1><p>A little intention. A little progress. Start where you are.</p></div>
+ <div class="auth-grid"><section class="card auth-card"><h2>Sign in to your workspace</h2><StatusMessage Message="@errorMessage" /><EditForm EditContext="editContext" method="post" OnSubmit="LoginUser" FormName="login"><DataAnnotationsValidator /><ValidationSummary /><label for="Input.Email">Email address</label><InputText @bind-Value="Input.Email" id="Input.Email" class="form-control" autocomplete="username webauthn" type="email" /><label for="Input.Password">Password</label><InputText type="password" @bind-Value="Input.Password" id="Input.Password" class="form-control" autocomplete="current-password" /><div class="login-options"><label class="checkbox-label"><InputCheckbox @bind-Value="Input.RememberMe" /> Remember me</label><a href="Account/ForgotPassword" data-enhance-nav="false">Forgot password?</a></div><button type="submit" class="btn btn-primary w-100">Sign in ↗</button><div class="auth-divider">or</div><PasskeySubmit Operation="PasskeyOperation.Request" Name="Input.Passkey" EmailName="Input.Email" class="btn btn-outline-primary w-100">Use a passkey</PasskeySubmit><p class="auth-switch">New here? <a href="Account/Register" data-enhance-nav="false">Create an account</a></p><a class="small-link" href="Account/ResendEmailConfirmation" data-enhance-nav="false">Resend email confirmation</a></EditForm></section><aside class="auth-promise"><span class="promise-symbol">✦</span><h2>Consistency begins<br />with coming back.</h2><p>Your plans, your priorities, your pace. Pick up where you left off.</p></aside></div>
+ 
++<DevelopmentEmailNotice />
++
+ @code {
+     private string? errorMessage;
+     private EditContext editContext = default!;
+diff --git a/src/SrSimplifyRoutine.Web/Components/Account/Pages/Register.razor b/src/SrSimplifyRoutine.Web/Components/Account/Pages/Register.razor
+index 3fba4e5..5da683e 100644
+--- a/src/SrSimplifyRoutine.Web/Components/Account/Pages/Register.razor
++++ b/src/SrSimplifyRoutine.Web/Components/Account/Pages/Register.razor
+@@ -15,6 +15,8 @@
+ <PageTitle>Create account · SR Simplify Routine</PageTitle>
+ <div class="auth-intro"><span class="eyebrow">WELCOME TO YOUR NEXT CHAPTER</span><h1>A routine that fits your life<span class="accent">.</span></h1><p>Create your private workspace. Make time for what matters.</p></div>
+ <div class="auth-grid"><section class="card auth-card"><h2>Create your account</h2><StatusMessage Message="@error" /><EditForm Model="Input" method="post" OnValidSubmit="RegisterUser" FormName="register"><DataAnnotationsValidator /><ValidationSummary /><label for="Input.DisplayName">Your name</label><InputText id="Input.DisplayName" class="form-control" @bind-Value="Input.DisplayName" maxlength="60" autocomplete="given-name" placeholder="What should we call you?" /><label for="Input.Email">Email address</label><InputText id="Input.Email" class="form-control" @bind-Value="Input.Email" maxlength="254" autocomplete="username" type="email" placeholder="you@example.com" /><label for="Input.Password">Password</label><InputText id="Input.Password" class="form-control" @bind-Value="Input.Password" type="password" maxlength="128" autocomplete="new-password" /><p class="field-help">Use a unique passphrase of at least 12 characters.</p><label for="Input.ConfirmPassword">Confirm password</label><InputText id="Input.ConfirmPassword" class="form-control" @bind-Value="Input.ConfirmPassword" type="password" maxlength="128" autocomplete="new-password" /><div class="honeypot" aria-hidden="true"><label for="Input.Website">Leave this field blank</label><InputText id="Input.Website" @bind-Value="Input.Website" tabindex="-1" autocomplete="off" /></div>@if(Configuration.GetValue<bool>("BotProtection:Enabled")){<div class="cf-turnstile" data-sitekey="@Configuration["BotProtection:SiteKey"]" data-action="register"></div>}<button class="btn btn-primary w-100" type="submit">Create account ↗</button><p class="auth-switch">Already have an account? <a href="Account/Login" data-enhance-nav="false">Sign in</a></p></EditForm></section><aside class="auth-promise"><span class="promise-symbol">✦</span><h2>A clearer day starts here.</h2><p>Studies. Workouts. Time for yourself. Bring it all together in a routine you can actually live with.</p><ul><li>Your own private calendar</li><li>Categories that grow with you</li><li>Progress, one week at a time</li></ul></aside></div>
++<DevelopmentEmailNotice />
++
+ @code {
+     [CascadingParameter] private HttpContext HttpContext {get;set;}=default!;
+     [SupplyParameterFromForm] private InputModel Input {get;set;}=default!;
+diff --git a/src/SrSimplifyRoutine.Web/Components/Account/Pages/RegisterConfirmation.razor b/src/SrSimplifyRoutine.Web/Components/Account/Pages/RegisterConfirmation.razor
+index 372ae2a..56b629e 100644
+--- a/src/SrSimplifyRoutine.Web/Components/Account/Pages/RegisterConfirmation.razor
++++ b/src/SrSimplifyRoutine.Web/Components/Account/Pages/RegisterConfirmation.razor
+@@ -1,3 +1,5 @@
+ @page "/Account/RegisterConfirmation"
+ <PageTitle>Check your email · SR Simplify Routine</PageTitle>
+-<section class="card confirmation-card"><span class="feature-icon green-soft"><Icon Name="check" /></span><h1>Check your inbox<span class="accent">.</span></h1><p>If a new account could be created, we sent a link to confirm your email. Open it to start planning.</p><p>Already registered? Sign in or request a password reset.</p><div class="form-actions"><a class="btn btn-primary" href="Account/Login" data-enhance-nav="false">Go to sign in</a><a href="Account/ResendEmailConfirmation" data-enhance-nav="false">Resend confirmation</a></div></section>
++<section class="card confirmation-card"><span class="feature-icon green-soft"><Icon Name="check" /></span><h1>Check your inbox<span class="accent">.</span></h1><p>If a new account could be created, a confirmation message was requested. Open the link to start planning. If it does not arrive, check spam or use Resend confirmation.</p><p>Already registered? Sign in or request a password reset.</p><div class="form-actions"><a class="btn btn-primary" href="Account/Login" data-enhance-nav="false">Go to sign in</a><a href="Account/ResendEmailConfirmation" data-enhance-nav="false">Resend confirmation</a></div></section>
++
++<DevelopmentEmailNotice />
+diff --git a/src/SrSimplifyRoutine.Web/Components/Account/Pages/ResendEmailConfirmation.razor b/src/SrSimplifyRoutine.Web/Components/Account/Pages/ResendEmailConfirmation.razor
+index 014c1f0..6609e7b 100644
+--- a/src/SrSimplifyRoutine.Web/Components/Account/Pages/ResendEmailConfirmation.razor
++++ b/src/SrSimplifyRoutine.Web/Components/Account/Pages/ResendEmailConfirmation.razor
+@@ -33,6 +33,8 @@
+     </div>
+ </div>
+ 
++<DevelopmentEmailNotice />
++
+ @code {
+     private string? message;
+ 
+@@ -49,7 +51,7 @@
+         var user = await UserManager.FindByEmailAsync(Input.Email!);
+         if (user is null)
+         {
+-            message = "Verification email sent. Please check your email.";
++            message = "If this account exists, a confirmation message was requested. Check your inbox and spam folder.";
+             return;
+         }
+ 
+@@ -61,7 +63,7 @@
+             new Dictionary<string, object?> { ["userId"] = userId, ["code"] = code });
+         await EmailSender.SendConfirmationLinkAsync(user, Input.Email, HtmlEncoder.Default.Encode(callbackUrl));
+ 
+-        message = "Verification email sent. Please check your email.";
++        message = "If this account exists, a confirmation message was requested. Check your inbox and spam folder.";
+     }
+ 
+     private sealed class InputModel
+diff --git a/src/SrSimplifyRoutine.Web/Components/Account/Shared/DevelopmentEmailNotice.razor b/src/SrSimplifyRoutine.Web/Components/Account/Shared/DevelopmentEmailNotice.razor
+new file mode 100644
+index 0000000..c9ccc84
+--- /dev/null
++++ b/src/SrSimplifyRoutine.Web/Components/Account/Shared/DevelopmentEmailNotice.razor
+@@ -0,0 +1,10 @@
++@using SrSimplifyRoutine.Web.Services
++@inject IWebHostEnvironment Environment
++@inject IConfiguration Configuration
++@if (Context is not null && DevelopmentTools.IsLocalRequest(Context, Environment) && string.IsNullOrWhiteSpace(Configuration["Smtp:Host"]))
++{
++    <aside class="card" role="note"><strong>Local development email</strong><p>Email delivery is simulated on this computer. Confirmation and password reset messages will appear in the local inbox, not your real email inbox.</p><a class="btn btn-outline-primary" href="/dev/inbox" data-enhance-nav="false">Open local inbox</a></aside>
++}
++@code {
++    [CascadingParameter] private HttpContext? Context { get; set; }
++}
+diff --git a/src/SrSimplifyRoutine.Web/Program.cs b/src/SrSimplifyRoutine.Web/Program.cs
+index 4afa09a..2bd1324 100644
+--- a/src/SrSimplifyRoutine.Web/Program.cs
++++ b/src/SrSimplifyRoutine.Web/Program.cs
+@@ -11,6 +11,8 @@ using SrSimplifyRoutine.Web.Services;
+ var builder = WebApplication.CreateBuilder(args);
+ var development = builder.Environment.IsDevelopment();
+ var migrateOnly = args.Contains("--migrate");
++var createDemo = args.Contains("--create-demo");
++if (createDemo && !development) throw new InvalidOperationException("Demo accounts are available only in Development.");
+ if (!development && !migrateOnly)
+ {
+     var origin = builder.Configuration["Application:PublicOrigin"];
+@@ -76,17 +78,31 @@ builder.Services.AddSingleton<CircuitBudget>();
+ builder.Services.AddScoped<Microsoft.AspNetCore.Components.Server.Circuits.CircuitHandler, BudgetCircuitHandler>();
+ builder.Services.AddScoped<ICurrentUser, CurrentUser>();
+ builder.Services.AddScoped<PlannerService>();
+-builder.Services.AddSingleton<IEmailSender<ApplicationUser>, RoutineEmailSender>();
++builder.Services.AddSingleton<RoutineEmailSender>();
++builder.Services.AddSingleton<IEmailSender<ApplicationUser>>(services => services.GetRequiredService<RoutineEmailSender>());
+ builder.Services.AddHttpClient<BotProtection>(client => client.Timeout = TimeSpan.FromSeconds(10));
+ builder.Services.AddHostedService<UnverifiedAccountCleanup>();
+ 
+ var app = builder.Build();
++var testEmailIndex = Array.IndexOf(args, "--test-email");
++if (testEmailIndex >= 0)
++{
++    if (testEmailIndex + 1 >= args.Length) throw new ArgumentException("Usage: --test-email your-address@example.com");
++    await app.Services.GetRequiredService<RoutineEmailSender>().SendTestEmailAsync(args[testEmailIndex + 1]);
++    Console.WriteLine("SMTP server accepted the test message. Check the destination inbox and spam folder.");
++    return;
++}
+ // Development bootstraps itself. Production migrations are an explicit deployment operation.
+ if (development || migrateOnly)
+ {
+     using var scope = app.Services.CreateScope();
+     await scope.ServiceProvider.GetRequiredService<ApplicationDbContext>().Database.MigrateAsync();
+ }
++if (createDemo)
++{
++    await DevelopmentTools.CreateDemoAccountAsync(app.Services);
++    return;
++}
+ if (migrateOnly) return;
+ if (development) app.UseMigrationsEndPoint();
+ else { app.UseExceptionHandler("/Error", createScopeForErrors: true); app.UseHsts(); app.UseHttpsRedirection(); }
+@@ -105,6 +121,7 @@ app.UseMiddleware<RequestThrottleMiddleware>();
+ app.UseAuthentication();
+ app.UseAuthorization();
+ app.UseAntiforgery();
++app.MapDevelopmentInbox();
+ app.MapStaticAssets();
+ app.MapRazorComponents<App>().AddInteractiveServerRenderMode();
+ app.MapAdditionalIdentityEndpoints();
+diff --git a/src/SrSimplifyRoutine.Web/Services/DevelopmentTools.cs b/src/SrSimplifyRoutine.Web/Services/DevelopmentTools.cs
+new file mode 100644
+index 0000000..0faf1e5
+--- /dev/null
++++ b/src/SrSimplifyRoutine.Web/Services/DevelopmentTools.cs
+@@ -0,0 +1,68 @@
++using System.Net;
++using System.Security.Cryptography;
++using System.Text.Encodings.Web;
++using System.Text.RegularExpressions;
++using Microsoft.AspNetCore.Identity;
++using SrSimplifyRoutine.Web.Data;
++
++namespace SrSimplifyRoutine.Web.Services;
++
++public static class DevelopmentTools
++{
++    // Both checks matter: Host validation also prevents DNS rebinding.
++    public static bool IsLocalRequest(HttpContext context, IHostEnvironment environment) =>
++        environment.IsDevelopment() && context.Connection.RemoteIpAddress is { } address &&
++        IPAddress.IsLoopback(address) &&
++        (context.Request.Host.Host.Equals("localhost", StringComparison.OrdinalIgnoreCase) ||
++         context.Request.Host.Host is "127.0.0.1" or "[::1]" or "::1");
++
++    public static void MapDevelopmentInbox(this WebApplication app)
++    {
++        if (!app.Environment.IsDevelopment()) return;
++        app.MapGet("/dev/inbox", async (HttpContext context, string? id) =>
++        {
++            if (!IsLocalRequest(context, app.Environment)) return Results.NotFound();
++            context.Response.Headers.CacheControl = "no-store";
++            context.Response.Headers["X-Robots-Tag"] = "noindex, nofollow";
++            context.Response.Headers["Content-Security-Policy"] = "default-src 'none'; base-uri 'none'; frame-ancestors 'none'";
++            var directory = Path.Combine(app.Environment.ContentRootPath, ".dev-mail");
++            if (id is not null)
++            {
++                if (!Regex.IsMatch(id, @"\A[0-9]{17}-[a-f0-9]{32}\.html\z")) return Results.NotFound();
++                var path = Path.Combine(directory, id);
++                if (!File.Exists(path)) return Results.NotFound();
++                return Results.Content(await File.ReadAllTextAsync(path), "text/html");
++            }
++            var files = Directory.Exists(directory)
++                ? Directory.EnumerateFiles(directory, "*.html").OrderDescending().Take(50).ToArray() : [];
++            var items = new List<string>();
++            foreach (var file in files)
++            {
++                var name = Path.GetFileName(file);
++                // Only the sender's generated files are exposed.
++                if (!Regex.IsMatch(name, @"\A[0-9]{17}-[a-f0-9]{32}\.html\z")) continue;
++                var body = await File.ReadAllTextAsync(file);
++                var recipient = Regex.Match(body, @"<p>To: (.*?)</p>").Groups[1].Value;
++                items.Add($"<li><a href=\"/dev/inbox?id={name}\">{HtmlEncoder.Default.Encode(name)}</a> — {recipient}</li>");
++            }
++            return Results.Content("<!doctype html><meta charset=\"utf-8\"><title>SR local inbox</title><h1>Local development inbox</h1><p>These messages stay on this computer. Open a message to confirm an account or reset its password.</p><ul>" +
++                string.Join("", items) + "</ul><p><a href=\"/Account/Login\">Return to sign in</a></p>", "text/html");
++        });
++    }
++
++    public static async Task CreateDemoAccountAsync(IServiceProvider services)
++    {
++        using var scope = services.CreateScope();
++        var environment = scope.ServiceProvider.GetRequiredService<IHostEnvironment>();
++        if (!environment.IsDevelopment()) throw new InvalidOperationException("Demo accounts are available only in Development.");
++        var users = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
++        var email = $"demo-{Guid.NewGuid():N}@example.test";
++        var password = Convert.ToBase64String(RandomNumberGenerator.GetBytes(24));
++        var result = await users.CreateAsync(new ApplicationUser
++        {
++            UserName = email, Email = email, EmailConfirmed = true, DisplayName = "Demo planner"
++        }, password);
++        if (!result.Succeeded) throw new InvalidOperationException(string.Join("; ", result.Errors.Select(e => e.Description)));
++        Console.WriteLine($"Development test account created. Save these credentials locally.\nEmail: {email}\nPassword: {password}");
++    }
++}
+diff --git a/src/SrSimplifyRoutine.Web/Services/RoutineEmailSender.cs b/src/SrSimplifyRoutine.Web/Services/RoutineEmailSender.cs
+index 15467ef..2956500 100644
+--- a/src/SrSimplifyRoutine.Web/Services/RoutineEmailSender.cs
++++ b/src/SrSimplifyRoutine.Web/Services/RoutineEmailSender.cs
+@@ -15,6 +15,13 @@ public sealed class RoutineEmailSender(IConfiguration config, IWebHostEnvironmen
+     public Task SendPasswordResetCodeAsync(ApplicationUser user, string email, string resetCode) =>
+         SendAsync(email, "SR Simplify Routine reset code", HtmlEncoder.Default.Encode(resetCode));
+ 
++    public Task SendTestEmailAsync(string email)
++    {
++        if (string.IsNullOrWhiteSpace(config["Smtp:Host"]) || string.IsNullOrWhiteSpace(config["Smtp:From"]))
++            throw new InvalidOperationException("Configure Smtp:Host and Smtp:From before testing actual delivery.");
++        return SendAsync(email, "SR Simplify Routine email delivery test", "Your SMTP server accepted an SR email delivery test.", true);
++    }
++
+     private string TrustedLink(string encoded)
+     {
+         var source = new Uri(WebUtility.HtmlDecode(encoded));
+@@ -24,11 +31,11 @@ public sealed class RoutineEmailSender(IConfiguration config, IWebHostEnvironmen
+         return HtmlEncoder.Default.Encode(target.AbsoluteUri);
+     }
+ 
+-    private async Task SendAsync(string email, string subject, string html)
++    private async Task SendAsync(string email, string subject, string html, bool reportFailure = false)
+     {
+         if (environment.IsDevelopment() && string.IsNullOrWhiteSpace(config["Smtp:Host"]))
+         {
+-            // Deliberately outside wwwroot. The website never serves confirmation/reset tokens.
++            // Outside wwwroot; accessible only through the loopback-only Development inbox.
+             var directory = Path.Combine(environment.ContentRootPath, ".dev-mail");
+             Directory.CreateDirectory(directory);
+             var body = $"<!doctype html><meta charset=\"utf-8\"><h1>{HtmlEncoder.Default.Encode(subject)}</h1><p>To: {HtmlEncoder.Default.Encode(email)}</p><p>{html}</p>";
+@@ -48,6 +55,7 @@ public sealed class RoutineEmailSender(IConfiguration config, IWebHostEnvironmen
+         {
+             // Do not disclose delivery state or recipients through anonymous authentication responses.
+             logger.LogError("Account email delivery failed. Check SMTP configuration and use resend after recovery.");
++            if (reportFailure) throw;
+         }
+     }
+ }
+diff --git a/src/SrSimplifyRoutine.Web/wwwroot/app.css b/src/SrSimplifyRoutine.Web/wwwroot/app.css
+index d91dbf3..c090032 100644
+--- a/src/SrSimplifyRoutine.Web/wwwroot/app.css
++++ b/src/SrSimplifyRoutine.Web/wwwroot/app.css
+@@ -5,3 +5,6 @@
+ @media(max-width:850px){.sidebar{width:76px;flex-basis:76px;padding:20px 12px}.brand{justify-content:center;margin-bottom:25px}.brand>span:last-child,.nav-caption,.sidebar-note,.sidebar-version,.main-nav .nav-dot,.account-links{display:none}.main-nav .nav-item{font-size:0;justify-content:center;padding:14px 10px}.main-nav .icon{height:20px;width:20px}.sidebar-bottom .btn{font-size:0;padding:10px}.sidebar-bottom .btn:after{content:"+";font-size:20px}.editor-grid{grid-template-columns:1fr}.editor-grid aside{display:none}.auth-promise{display:none}.auth-grid{grid-template-columns:1fr;max-width:500px}.category-page-grid{grid-template-columns:1fr}.category-grid{grid-template-columns:1fr 1fr}.feature-grid{gap:12px}.feature-card{padding:18px}.calendar-toolbar{flex-wrap:wrap}.welcome-hero h1{font-size:51px}.reflection-card .btn{display:none}}
+ @media(max-width:600px){.app-shell{display:block}.sidebar{position:static;height:auto;width:100%;padding:14px 16px;border-right:0;border-bottom:1px solid var(--line);display:block}.brand{justify-content:flex-start;margin:0 0 12px}.brand>span:last-child{display:block}.brand-mark{width:34px;height:34px;font-size:23px;border-radius:9px}.brand strong{font-size:14px}.brand small{font-size:7px}.main-nav{display:flex;gap:4px;overflow-x:auto;padding-bottom:1px}.main-nav .nav-item{flex:0 0 auto;gap:5px;padding:8px 10px;font-size:10px;margin:0}.main-nav .icon{height:13px;width:13px}.sidebar-bottom{display:none}.topbar{height:50px;padding:0 18px}.workspace-label{font-size:9px}.profile-pill{font-size:9px}.page-content{padding:25px 18px 35px}.page-heading{align-items:flex-start;flex-direction:column;gap:15px;margin-bottom:21px}.page-heading h1{font-size:26px}.page-heading p:last-child{font-size:12px}.page-heading>.btn{font-size:11px;padding:8px 13px}.eyebrow{font-size:8px}.week-banner{padding:23px;min-height:205px;gap:10px}.week-banner h2{font-size:24px}.week-banner p{font-size:10px}.week-banner .eyebrow{font-size:7px}.week-ring{width:99px;height:99px;padding:7px;margin:0;flex-shrink:0}.week-ring strong{font-size:27px}.week-ring strong span{font-size:14px}.week-ring small{font-size:7px;margin-top:4px}.banner-decoration{font-size:170px}.stats-grid{gap:8px;margin:17px 0}.stat-card{padding:14px 11px}.stat-card small{font-size:7px;letter-spacing:.05em;min-height:19px;margin-bottom:7px}.stat-card>strong{font-size:24px}.stat-card>strong span{font-size:9px;display:block;letter-spacing:0}.stat-card p{font-size:8px;line-height:1.6}.section-heading{padding:20px 17px 11px}.section-heading h2{font-size:17px}.activity-list{padding:0 17px 8px}.activity-row{gap:9px}.activity-title{font-size:11px}.activity-meta{font-size:8px;gap:7px}.activity-meta .category-label{font-size:8px}.status-pill{display:none}.calendar-toolbar{padding:17px;gap:17px}.calendar-date{gap:8px}.calendar-date h2{font-size:16px;min-width:120px}.calendar-date .btn{font-size:10px;padding:5px 7px}.segmented{width:100%}.segmented button{flex:1}.calendar-filters{padding:0 17px 17px}.calendar-filters>span{font-size:8px}.calendar-filters .form-select{max-width:155px}.calendar-scroll{overflow-x:auto}.calendar-grid{min-width:550px}.calendar-cell{min-height:100px}.calendar-event{font-size:8px}.calendar-legend{gap:12px;padding:15px}.calendar-legend .category-label{font-size:8px}.list-filters{grid-template-columns:1fr 1fr;padding:17px;gap:12px}.list-filters>label:first-child{grid-column:span 2}.range-filters{padding:15px 17px;flex-wrap:wrap;gap:10px}.range-filters label{flex:1;min-width:110px}.range-filters>span{padding:0}.editor-card{padding:20px}.form-grid{grid-template-columns:1fr;gap:0}.category-grid{gap:12px}.category-card{padding:17px}.category-card h2{font-size:16px}.category-card p{font-size:10px}.category-form{padding:22px}.period-selector{gap:8px;flex-wrap:wrap}.period-selector strong{font-size:12px}.period-selector span{font-size:9px}.progress-labels{align-items:flex-start;flex-direction:column;gap:5px}.category-progress{padding:20px}.progress-labels>span:last-child{font-size:10px}.reflection-card{padding:20px;gap:14px}.reflection-card h2{font-size:16px}.reflection-card p{font-size:10px}.app-footer{padding:17px 18px;font-size:8px}.welcome-hero{padding:20px 0 32px}.welcome-hero h1{font-size:43px}.welcome-hero>p{font-size:13px}.hero-actions{gap:10px}.hero-actions .btn{font-size:12px;padding:12px 17px}.trust-line{gap:12px;font-size:8px;flex-wrap:wrap}.feature-grid{grid-template-columns:1fr}.feature-card{padding:22px}.auth-intro h1{font-size:28px}.auth-intro p{font-size:12px}.auth-card{padding:23px}.auth-card h2{font-size:19px}.confirmation-card{padding:24px;margin:20px auto}.confirmation-card h1{font-size:25px}}
+ @media(prefers-reduced-motion:reduce){*{scroll-behavior:auto!important;transition:none!important;animation:none!important}}
++
++/* Navigation focuses headings for screen readers; keep control focus rings intact. */
++h1[tabindex="-1"]:focus { outline: none; }
+diff --git a/tests/SrSimplifyRoutine.Tests/DevelopmentAccessTests.cs b/tests/SrSimplifyRoutine.Tests/DevelopmentAccessTests.cs
+new file mode 100644
+index 0000000..730f195
+--- /dev/null
++++ b/tests/SrSimplifyRoutine.Tests/DevelopmentAccessTests.cs
+@@ -0,0 +1,34 @@
++using System.Net;
++using Microsoft.AspNetCore.Http;
++using Microsoft.Extensions.FileProviders;
++using Microsoft.Extensions.Hosting;
++using SrSimplifyRoutine.Web.Services;
++
++namespace SrSimplifyRoutine.Tests;
++
++public class DevelopmentAccessTests
++{
++    [Theory]
++    [InlineData("Development", "127.0.0.1", "localhost:5127", true)]
++    [InlineData("Development", "::1", "[::1]:5127", true)]
++    [InlineData("Development", "127.0.0.1", "127.0.0.1:5127", true)]
++    [InlineData("Production", "127.0.0.1", "localhost:5127", false)]
++    [InlineData("Development", "192.0.2.1", "localhost:5127", false)]
++    [InlineData("Development", "127.0.0.1", "attacker.example", false)]
++    public void Inbox_requires_development_and_loopback_and_local_host(string environment, string ip, string host, bool expected)
++    {
++        var context = new DefaultHttpContext();
++        context.Connection.RemoteIpAddress = IPAddress.Parse(ip);
++        context.Request.Host = new HostString(host);
++        context.Request.Headers["X-Forwarded-For"] = "127.0.0.1";
++        Assert.Equal(expected, DevelopmentTools.IsLocalRequest(context, new TestEnvironment { EnvironmentName = environment }));
++    }
++
++    private sealed class TestEnvironment : IHostEnvironment
++    {
++        public string EnvironmentName { get; set; } = "Development";
++        public string ApplicationName { get; set; } = "Tests";
++        public string ContentRootPath { get; set; } = ".";
++        public IFileProvider ContentRootFileProvider { get; set; } = new NullFileProvider();
++    }
++}
+diff --git a/tests/browser/smoke.cjs b/tests/browser/smoke.cjs
+index 8c34b90..2e5aee2 100644
+--- a/tests/browser/smoke.cjs
++++ b/tests/browser/smoke.cjs
+@@ -38,6 +38,11 @@ let browser;
+   page.on('pageerror', error => errors.push(error.message));
+   const go = async url => { await page.goto(base + url); await page.waitForLoadState('networkidle'); };
+   await go('/');
++  await page.locator('h1').evaluate(element => { element.tabIndex = -1; element.focus(); });
++  assert.equal(await page.locator('h1').evaluate(element => getComputedStyle(element).outlineStyle), 'none');
++  await page.keyboard.press('Tab');
++  assert.ok(await page.locator(':focus').evaluate(element => { const style = getComputedStyle(element); return style.outlineStyle !== 'none' || style.boxShadow !== 'none'; }));
++  passed('Navigation heading has no outline; keyboard controls retain focus rings');
+   await page.getByRole('link', { name: 'Build my routine' }).click();
+   await page.locator('#Input\\.DisplayName').fill('Matheus');
+   await page.locator('#Input\\.Email').fill(email);
+diff --git a/tests/http/smoke.py b/tests/http/smoke.py
+new file mode 100644
+index 0000000..e1ce9b1
+--- /dev/null
++++ b/tests/http/smoke.py
+@@ -0,0 +1,89 @@
++"""Run after a Release build: python tests/http/smoke.py. Uses only Python's standard library.
++Creates a disposable database and keys; no external email is sent.
++"""
++import html, http.cookiejar, json, os, re, secrets, subprocess, tempfile, time
++from pathlib import Path
++from urllib import request, parse, error
++
++root = Path(__file__).resolve().parents[2]
++app = root / 'src/SrSimplifyRoutine.Web'
++dotnet = os.environ.get('SR_DOTNET', 'dotnet')
++base = 'http://127.0.0.1:5147'
++messages = []
++with tempfile.TemporaryDirectory(prefix='sr-http-') as temp:
++    env = dict(os.environ, ASPNETCORE_ENVIRONMENT='Development', ASPNETCORE_URLS=base,
++               ConnectionStrings__DefaultConnection=f'Data Source={temp}/test.db;Foreign Keys=True',
++               Application__KeysPath=f'{temp}/keys', Smtp__Host='', BotProtection__Enabled='false')
++    command = [dotnet, 'bin/Release/net10.0/SrSimplifyRoutine.Web.dll']
++    demo = subprocess.run(command + ['--create-demo'], cwd=app, env=env, capture_output=True, text=True, check=True)
++    demo_email = re.search(r'^Email: (.+)$', demo.stdout, re.M)[1]
++    demo_password = re.search(r'^Password: (.+)$', demo.stdout, re.M)[1]
++    cookies = http.cookiejar.CookieJar()
++    client = request.build_opener(request.ProxyHandler({}), request.HTTPCookieProcessor(cookies))
++    def fetch(path, data=None, headers=None):
++        req = request.Request(base + path, data=parse.urlencode(data).encode() if data is not None else None, headers=headers or {})
++        try:
++            response = client.open(req, timeout=15)
++        except error.HTTPError as ex:
++            response = ex
++        return response.status, response.read().decode(), response.geturl(), response.headers
++    def post(path, values):
++        status, body, _, _ = fetch(path)
++        assert status == 200, (path, status)
++        hidden = {html.unescape(k): html.unescape(v) for k, v in re.findall(r'<input[^>]*type="hidden"[^>]*name="([^"]+)"[^>]*value="([^"]*)"', body)}
++        assert '__RequestVerificationToken' in hidden and '_handler' in hidden, 'Missing form metadata'
++        return fetch(path, dict(hidden, **values))
++    with open(Path(temp) / 'server.log', 'w+') as log:
++        server = subprocess.Popen(command, cwd=app, env=env, stdout=log, stderr=log)
++        try:
++            for _ in range(80):
++                try:
++                    if fetch('/')[0] == 200: break
++                except (OSError, error.URLError): pass
++                if server.poll() is not None:
++                    log.seek(0); raise AssertionError(log.read())
++                time.sleep(.25)
++            else: raise AssertionError('Server did not start')
++            assert '/Account/Login' in fetch('/dashboard')[2]
++            assert fetch('/missing-page')[0] == 404
++            assert fetch('/Account/Login', {'Input.Email': 'x'})[0] == 400
++            assert fetch('/dev/inbox?id=../../appsettings.json')[0] == 404
++            assert fetch('/dev/inbox', headers={'Host': 'attacker.example'})[0] in (400,404)
++            print('PASS anonymous access, antiforgery, missing page and inbox path/host restrictions')
++            email = f'http-{secrets.token_hex(8)}@example.test'
++            password = secrets.token_urlsafe(24)
++            status, body, url, _ = post('/Account/Register', {'Input.DisplayName': 'HTTP test', 'Input.Email': email,
++                'Input.Password': password, 'Input.ConfirmPassword': password, 'Input.Website': ''})
++            assert status == 200 and 'RegisterConfirmation' in url, (status, url)
++            assert 'Open local inbox' in body
++            status, body, url, _ = post('/Account/Login', {'Input.Email': email, 'Input.Password': password})
++            assert '/Account/Login' in url and 'Invalid login' in body
++            inbox = fetch('/dev/inbox')
++            assert inbox[0] == 200 and inbox[3]['Cache-Control'] == 'no-store'
++            file = next(f for f in (app/'.dev-mail').glob('*.html') if email in f.read_text())
++            messages.append(file)
++            status, body, _, _ = fetch('/dev/inbox?id=' + file.name)
++            assert status == 200
++            link = html.unescape(re.search(r'href="([^"]+)"', body)[1])
++            assert fetch(link.removeprefix(base))[0] == 200
++            status, body, url, _ = post('/Account/Login', {'Input.Email': email, 'Input.Password': password})
++            assert status == 200 and url.endswith('/dashboard'), (status, url)
++            for page in ('dashboard','calendar','planner','studies','workouts','categories','progress','preferences'):
++                status, body, url, _ = fetch('/' + page)
++                assert status == 200 and '/Account/Login' not in url, (page, status, url)
++            print('PASS registration, local inbox, blocked unconfirmed login, confirmation and all planner pages')
++            cookies.clear()
++            status, body, url, _ = post('/Account/Login', {'Input.Email': demo_email, 'Input.Password': demo_password})
++            assert status == 200 and url.endswith('/dashboard'), (status,url)
++            print('PASS generated test credentials sign in successfully')
++            prod = subprocess.run(command + ['--create-demo'], cwd=app,
++                env=dict(env, ASPNETCORE_ENVIRONMENT='Production'), capture_output=True, text=True)
++            assert prod.returncode != 0 and 'only in Development' in prod.stderr
++            smtp = subprocess.run(command + ['--test-email', 'nobody@example.test'], cwd=app,
++                env=env, capture_output=True, text=True)
++            assert smtp.returncode != 0 and 'Configure Smtp:Host' in smtp.stderr
++            print('PASS production refuses demo creation; SMTP test refuses missing configuration')
++        finally:
++            server.terminate()
++            server.wait(timeout=15)
++            for file in messages: file.unlink(missing_ok=True)
+-- 
+2.51.1
+
